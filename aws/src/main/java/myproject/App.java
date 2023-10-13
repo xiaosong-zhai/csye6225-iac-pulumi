@@ -163,7 +163,7 @@ public class App {
                     "publicSubnetAssociation" + i,
                     RouteTableAssociationArgs.builder()
                         .subnetId(publicSubnet.id())
-                        .routeTableId(publicRouteTable.id()) // 引用公共路由表的 ID
+                        .routeTableId(publicRouteTable.id())
                         .build());
           }
           // create private route table association
@@ -174,7 +174,7 @@ public class App {
                     "privateSubnetAssociation" + i,
                     RouteTableAssociationArgs.builder()
                         .subnetId(privateSubnet.id())
-                        .routeTableId(privateRouteTable.id()) // 引用私有路由表的 ID
+                        .routeTableId(privateRouteTable.id())
                         .build());
           }
           return null;
