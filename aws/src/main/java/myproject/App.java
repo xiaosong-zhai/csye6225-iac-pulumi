@@ -107,11 +107,11 @@ public class App {
         availabilityZones -> {
           List<String> zoneNames = availabilityZones.names();
           if (zoneNames != null) {
-            // 打印每个可用区的名字
+            // Print each AZ in the region to the console.
             zoneNames.forEach(zoneName -> System.out.println("Availability Zone: " + zoneName));
           } else {
             System.out.println(
-                "No availability zones retrieved or there was an error during retrieval.");
+                "No availability zones.");
           }
 
           assert zoneNames != null;
