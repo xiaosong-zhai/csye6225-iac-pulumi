@@ -1,0 +1,18 @@
+encryptionsalt: v1:mt1JTMtBApo=:v1:nuEw2mHfVKEGxbvp:NR1Ijhygmz7WNI0gdYJ9e1/8BsHaPA==
+config:
+  # vpc config
+  aws-pulumi-setup:cidrBlock: 10.0.0.0/16
+  # internet gateway config
+  aws-pulumi-setup:igwTagNameKey: Name
+  aws-pulumi-setup:igwTagNameValue: my-igw
+  aws-pulumi-setup:privateRtValue: my-private-rt
+  aws-pulumi-setup:privateSubnetTagNameValue: my-private-subnet
+  aws-pulumi-setup:publicRtValue: my-public-rt
+  aws-pulumi-setup:publicSubnetTagNameValue: my-public-subnet
+  # route table config
+  aws-pulumi-setup:rtTagNameKey: Name
+  # subnet config
+  aws-pulumi-setup:subnetTagNameKey: Name
+  aws-pulumi-setup:vpcTagNameKey: Name
+  aws-pulumi-setup:vpcTagNameValue: my-vpc
+  aws:region: us-east-1
