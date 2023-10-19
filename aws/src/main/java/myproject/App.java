@@ -4,8 +4,12 @@ import com.pulumi.Context;
 import com.pulumi.Pulumi;
 import com.pulumi.aws.AwsFunctions;
 import com.pulumi.aws.ec2.*;
+import com.pulumi.aws.ec2.inputs.InstanceRootBlockDeviceArgs;
 import com.pulumi.aws.ec2.inputs.RouteTableRouteArgs;
+import com.pulumi.aws.ec2.inputs.SecurityGroupEgressArgs;
+import com.pulumi.aws.ec2.inputs.SecurityGroupIngressArgs;
 import com.pulumi.aws.inputs.GetAvailabilityZonesArgs;
+import com.pulumi.core.Output;
 
 import java.util.*;
 
@@ -177,7 +181,82 @@ public class App {
                         .routeTableId(privateRouteTable.id())
                         .build());
           }
+            // create a security group
+            Optional<String> securityGroupTagNameKey = config.get("sgTagNameKey");
+            Optional<String> securityGroupTagNameValue = config.get("sgTagNameValue");
+            // check config
+            if(securityGroupTagNameKey.isEmpty() || securityGroupTagNameValue.isEmpty()) {
+                throw new RuntimeException("sgTagNameKey and sgTagNameValue must be configured");
+            }
+            // get config value to string
+            String sgTagName = securityGroupTagNameKey.get();
+            String sgTagNameValue = securityGroupTagNameValue.get();
+            var appSecurityGroup = new SecurityGroup(sgTagNameValue, SecurityGroupArgs.builder()
+                    .vpcId(main.id())
+                    .description("Security group for web application")
+                    .ingress(Arrays.asList(
+                            SecurityGroupIngressArgs.builder()
+                                    .description("SSH")
+                                    .fromPort(22)
+                                    .toPort(22)
+                                    .protocol("tcp")
+                                    .cidrBlocks("0.0.0.0/0")
+                                    .build(),
+                            SecurityGroupIngressArgs.builder()
+                                    .description("HTTP")
+                                    .fromPort(80)
+                                    .toPort(80)
+                                    .protocol("tcp")
+                                    .cidrBlocks("0.0.0.0/0")
+                                    .build(),
+                            SecurityGroupIngressArgs.builder()
+                                    .description("HTTPS")
+                                    .fromPort(443)
+                                    .toPort(443)
+                                    .protocol("tcp")
+                                    .cidrBlocks("0.0.0.0/0")
+                                    .build(),
+                            SecurityGroupIngressArgs.builder()
+                                    .description("webapp")
+                                    .fromPort(8080)  // replace with your application port
+                                    .toPort(8080)  // replace with your application port
+                                    .protocol("tcp")
+                                    .cidrBlocks("0.0.0.0/0")
+                                    .build()
+                    ))
+                    .egress(SecurityGroupEgressArgs.builder()
+                            .fromPort(0)
+                            .toPort(0)
+                            .protocol("-1")
+                            .cidrBlocks("0.0.0.0/0")
+                            .ipv6CidrBlocks("::/0")
+                            .build())
+                    .tags(Map.of(sgTagName, sgTagNameValue))
+                    .build());
+
+            Output<String> sgId = appSecurityGroup.id();
+            sgId.applyValue(id -> {
+                List<String> securityGroups = Collections.singletonList(id);
+                var webappInstance = new Instance("webapp", InstanceArgs.builder()
+                        .instanceType("t2.micro")
+                        .vpcSecurityGroupIds(securityGroups)
+                        .ami("ami-03f63aa561e2e374f")
+                        .subnetId(publicSubnets.get(0).id())
+                        .associatePublicIpAddress(true)
+                        .disableApiTermination(false)
+                        .keyName("test")
+                        .rootBlockDevice(InstanceRootBlockDeviceArgs.builder()
+                                .volumeSize(25)
+                                .volumeType("gp2")
+                                .deleteOnTermination(true)
+                                .build())
+                        .tags(Map.of("Name", "webapp"))
+                        .build());
+                return null;
+            });
+
           return null;
         });
+
     }
 }

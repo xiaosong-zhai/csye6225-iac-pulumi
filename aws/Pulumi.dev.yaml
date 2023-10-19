@@ -15,4 +15,7 @@ config:
   aws-pulumi-setup:subnetTagNameKey: Name
   aws-pulumi-setup:vpcTagNameKey: Name
   aws-pulumi-setup:vpcTagNameValue: my-vpc
-  aws:region: us-west-1
+  # security group config
+  aws-pulumi-setup:sgTagNameKey: Name
+  aws-pulumi-setup:sgTagNameValue: application-security-group
+  aws:region: us-west-2
