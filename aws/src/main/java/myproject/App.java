@@ -235,12 +235,21 @@ public class App {
                     .build());
 
             Output<String> sgId = appSecurityGroup.id();
+
+            Optional<String> AMiId = config.get("amiId");
+            // check config
+            if(AMiId.isEmpty()) {
+                throw new RuntimeException("amiId must be configured");
+            }
+            // get config value to string
+            String amiId = AMiId.get();
+
             sgId.applyValue(id -> {
                 List<String> securityGroups = Collections.singletonList(id);
                 var webappInstance = new Instance("webapp", InstanceArgs.builder()
                         .instanceType("t2.micro")
                         .vpcSecurityGroupIds(securityGroups)
-                        .ami("ami-03f63aa561e2e374f")
+                        .ami(amiId)
                         .subnetId(publicSubnets.get(0).id())
                         .associatePublicIpAddress(true)
                         .disableApiTermination(false)

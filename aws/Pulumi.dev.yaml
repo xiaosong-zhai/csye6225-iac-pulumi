@@ -18,4 +18,6 @@ config:
   # security group config
   aws-pulumi-setup:sgTagNameKey: Name
   aws-pulumi-setup:sgTagNameValue: application-security-group
+  # AMI config
+  aws-pulumi-setup:amiId: ami-03f63aa561e2e374f
   aws:region: us-west-2
