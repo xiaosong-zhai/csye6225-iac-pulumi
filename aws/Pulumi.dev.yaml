@@ -18,6 +18,17 @@ config:
   # security group config
   aws-pulumi-setup:sgTagNameKey: Name
   aws-pulumi-setup:sgTagNameValue: application-security-group
+  aws-pulumi-setup:dbSgTagNameValue: database-security-group
+  # db parameter group config
+  aws-pulumi-setup:dbParameterGroupName: mariadb-parameter-group
+  aws-pulumi-setup:dbParameterGroupFamily: mariadb10.4
+  # mariadb config
+  aws-pulumi-setup:dbTagNameKey: Name
+  aws-pulumi-setup:dbTagNameValue: csye6225
+  aws-pulumi-setup:dbInstanceName: csye6225
+  aws-pulumi-setup:dbInstanceClass: db.t2.micro
+  aws-pulumi-setup:dbMasterUsername: csye6225
+  aws-pulumi-setup:dbMasterPassword: zxs123123
   # AMI config
-  aws-pulumi-setup:amiId: ami-03f63aa561e2e374f
+  aws-pulumi-setup:amiId: ami-0dbdef91cd8917b9f
   aws:region: us-west-2
