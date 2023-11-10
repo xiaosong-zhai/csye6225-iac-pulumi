@@ -1,4 +1,4 @@
-encryptionsalt: v1:Q3hMHNJ4JTI=:v1:oksick9tjduPjsDp:gDyjqV0S7NgruVrjHwUXkpc4FknxPw==
+encryptionsalt: v1:ZDPrFiylQz0=:v1:o3sIyOAnkJ7iMrEy:4QMpF5kuMj3OMto0q5B8e76fdKqCLg==
 config:
   # vpc config
   aws-pulumi-setup:cidrBlock: 10.0.0.0/16
@@ -29,6 +29,9 @@ config:
   aws-pulumi-setup:dbInstanceClass: db.t2.micro
   aws-pulumi-setup:dbMasterUsername: csye6225
   aws-pulumi-setup:dbMasterPassword: zxs123123
+  # record set config
+  aws-pulumi-setup:zoneId: Z0385460J8NZBL4108D7
+  aws-pulumi-setup:domainName: demo.mrjello.me
   # AMI config
-  aws-pulumi-setup:amiId: ami-0dbdef91cd8917b9f
+  aws-pulumi-setup:amiId: ami-01af5165f35292c51
   aws:region: us-west-2
