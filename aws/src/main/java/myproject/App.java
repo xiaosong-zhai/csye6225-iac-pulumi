@@ -3,11 +3,20 @@ package myproject;
 import com.pulumi.Context;
 import com.pulumi.Pulumi;
 import com.pulumi.aws.AwsFunctions;
+import com.pulumi.aws.alb.*;
+import com.pulumi.aws.alb.inputs.ListenerDefaultActionArgs;
+import com.pulumi.aws.alb.inputs.TargetGroupHealthCheckArgs;
+import com.pulumi.aws.autoscaling.*;
+import com.pulumi.aws.autoscaling.Group;
+import com.pulumi.aws.autoscaling.GroupArgs;
+import com.pulumi.aws.autoscaling.Policy;
+import com.pulumi.aws.autoscaling.PolicyArgs;
+import com.pulumi.aws.autoscaling.inputs.GroupLaunchTemplateArgs;
+import com.pulumi.aws.autoscaling.inputs.GroupTagArgs;
+import com.pulumi.aws.cloudwatch.MetricAlarm;
+import com.pulumi.aws.cloudwatch.MetricAlarmArgs;
 import com.pulumi.aws.ec2.*;
-import com.pulumi.aws.ec2.inputs.InstanceRootBlockDeviceArgs;
-import com.pulumi.aws.ec2.inputs.RouteTableRouteArgs;
-import com.pulumi.aws.ec2.inputs.SecurityGroupEgressArgs;
-import com.pulumi.aws.ec2.inputs.SecurityGroupIngressArgs;
+import com.pulumi.aws.ec2.inputs.*;
 import com.pulumi.aws.iam.*;
 import com.pulumi.aws.inputs.GetAvailabilityZonesArgs;
 import com.pulumi.aws.rds.ParameterGroup;
@@ -17,6 +26,7 @@ import com.pulumi.aws.rds.SubnetGroupArgs;
 import com.pulumi.aws.rds.inputs.ParameterGroupParameterArgs;
 import com.pulumi.aws.route53.Record;
 import com.pulumi.aws.route53.RecordArgs;
+import com.pulumi.aws.route53.inputs.RecordAliasArgs;
 import com.pulumi.core.Output;
 
 import java.util.*;
@@ -201,6 +211,41 @@ public class App {
           // get config value to string
           String sgTagName = securityGroupTagNameKey.get();
           String sgTagNameValue = securityGroupTagNameValue.get();
+
+          var loadBalancerSecurityGroup
+                  = new SecurityGroup(
+                          "loadBalancerSecurityGroup",
+                                SecurityGroupArgs.builder()
+                                  .vpcId(main.id())
+                                  .description("Security group for load balancer")
+                                  .ingress(
+                                          Arrays.asList(
+                                                  SecurityGroupIngressArgs.builder()
+                                                          .description("HTTP")
+                                                          .fromPort(80)
+                                                          .toPort(80)
+                                                          .protocol("tcp")
+                                                          .cidrBlocks("0.0.0.0/0")
+                                                          .build(),
+                                                  SecurityGroupIngressArgs.builder()
+                                                          .description("HTTPS")
+                                                          .fromPort(443)
+                                                          .toPort(443)
+                                                          .protocol("tcp")
+                                                          .cidrBlocks("0.0.0.0/0")
+                                                          .build()))
+                                        .egress(
+                                                SecurityGroupEgressArgs.builder()
+                                                        .fromPort(0)
+                                                        .toPort(0)
+                                                        .protocol("-1")
+                                                        .cidrBlocks("0.0.0.0/0")
+                                                        .ipv6CidrBlocks("::/0")
+                                                        .build())
+                                  .tags(Map.of("name", "loadBalancerSecurityGroup"))
+                                  .build());
+
+
           var appSecurityGroup =
               new SecurityGroup(
                   sgTagNameValue,
@@ -217,25 +262,11 @@ public class App {
                                   .cidrBlocks("0.0.0.0/0")
                                   .build(),
                               SecurityGroupIngressArgs.builder()
-                                  .description("HTTP")
-                                  .fromPort(80)
-                                  .toPort(80)
-                                  .protocol("tcp")
-                                  .cidrBlocks("0.0.0.0/0")
-                                  .build(),
-                              SecurityGroupIngressArgs.builder()
-                                  .description("HTTPS")
-                                  .fromPort(443)
-                                  .toPort(443)
-                                  .protocol("tcp")
-                                  .cidrBlocks("0.0.0.0/0")
-                                  .build(),
-                              SecurityGroupIngressArgs.builder()
                                   .description("webapp")
                                   .fromPort(8080) // replace with your application port
                                   .toPort(8080) // replace with your application port
                                   .protocol("tcp")
-                                  .cidrBlocks("0.0.0.0/0")
+                                  .securityGroups(loadBalancerSecurityGroup.id().applyValue(List::of))
                                   .build()))
                       .egress(
                           SecurityGroupEgressArgs.builder()
@@ -362,6 +393,9 @@ public class App {
                 var privateSubnetIds =
                     Output.all(
                         privateSubnets.stream().map(Subnet::id).collect(Collectors.toList()));
+
+                  var publicSubnetIds =
+                    Output.all(publicSubnets.stream().map(Subnet::id).collect(Collectors.toList()));
 
                 var dbPrivateSubnetGroup =
                     new SubnetGroup(
@@ -514,60 +548,237 @@ public class App {
 
                           // create a webapp instance
                           List<String> securityGroups = Collections.singletonList(id);
-                          var webappInstance =
-                              new Instance(
-                                  "webapp",
-                                  InstanceArgs.builder()
-                                      .instanceType("t2.micro")
-                                      .vpcSecurityGroupIds(securityGroups)
-                                      .ami(amiId)
-                                      .iamInstanceProfile(instanceProfile.id())
-                                      .subnetId(publicSubnets.get(0).id())
-                                      .associatePublicIpAddress(true)
-                                      .disableApiTermination(false)
-                                      .keyName("test")
-                                      .userData(userData)
-                                      .rootBlockDevice(
-                                          InstanceRootBlockDeviceArgs.builder()
-                                              .volumeSize(25)
-                                              .volumeType("gp2")
-                                              .deleteOnTermination(true)
-                                              .build())
-                                      .tags(Map.of("Name", "webapp"))
-                                      .build());
+//                          var webappInstance =
+//                              new Instance(
+//                                  "webapp",
+//                                  InstanceArgs.builder()
+//                                      .instanceType("t2.micro")
+//                                      .vpcSecurityGroupIds(securityGroups)
+//                                      .ami(amiId)
+//                                      .iamInstanceProfile(instanceProfile.id())
+//                                      .subnetId(publicSubnets.get(0).id())
+//                                      .associatePublicIpAddress(true)
+//                                      .disableApiTermination(false)
+//                                      .keyName("test")
+//                                      .userData(userData)
+//                                      .rootBlockDevice(
+//                                          InstanceRootBlockDeviceArgs.builder()
+//                                              .volumeSize(25)
+//                                              .volumeType("gp2")
+//                                              .deleteOnTermination(true)
+//                                              .build())
+//                                      .tags(Map.of("Name", "webapp"))
+//                                      .build());
 
-                          webappInstance
-                              .publicIp()
-                              .apply(
-                                  ip -> {
-                                      Optional<String> hostedZoneId = config.get("zoneId");
-                                      Optional<String> domainName = config.get("domainName");
-                                      // check config
-                                        if (hostedZoneId.isEmpty() || domainName.isEmpty()) {
-                                            throw new RuntimeException("zoneId and domainName must be configured");
-                                        }
-                                        // get config value to string
-                                        String zoneId = hostedZoneId.get();
-                                        String domainNameString = domainName.get();
-                                    // create a route53 record
-                                    var record =
+                          // create launch template used to create auto scaling groups.
+                            var launchTemplate =
+                                new LaunchTemplate(
+                                    "webappLaunchTemplate",
+                                    LaunchTemplateArgs.builder()
+                                        .namePrefix("webapp")
+                                        .imageId(amiId)
+                                        .instanceType("t2.micro")
+                                        .iamInstanceProfile(
+                                            LaunchTemplateIamInstanceProfileArgs.builder()
+                                                .arn(instanceProfile.arn())
+                                                .build())
+                                        .networkInterfaces(LaunchTemplateNetworkInterfaceArgs.builder()
+                                                .associatePublicIpAddress(String.valueOf(true))
+                                                .securityGroups(appSecurityGroup.id().applyValue(List::of))
+                                                .subnetId(publicSubnets.get(0).id())
+                                                .subnetId(publicSubnets.get(1).id())
+                                                .build())
+                                        .keyName("test")
+                                        .userData(Base64.getEncoder().encodeToString(userData.getBytes()))
+                                        .disableApiTermination(false)
+                                        .instanceInitiatedShutdownBehavior("terminate")
+                                        .blockDeviceMappings(
+                                            LaunchTemplateBlockDeviceMappingArgs.builder()
+                                                .deviceName("/dev/xvda")
+                                                .ebs(
+                                                    LaunchTemplateBlockDeviceMappingEbsArgs.builder()
+                                                        .volumeSize(25)
+                                                        .volumeType("gp2")
+                                                        .deleteOnTermination(String.valueOf(true))
+                                                        .build())
+                                                .build())
+                                        .tagSpecifications(LaunchTemplateTagSpecificationArgs.builder()
+                                                .resourceType("instance")
+                                                .tags(Map.of("Name", "webapp"))
+                                                .build())
+                                        .build());
+
+
+                             // create auto scaling group
+                            var appAutoScalingGroup = new Group("csye6225_asg", GroupArgs.builder()
+//                                    .availabilityZones(zoneNames.get(0))
+                                    .vpcZoneIdentifiers(publicSubnetIds.applyValue(ids -> ids))
+                                    .healthCheckGracePeriod(300)
+                                    .desiredCapacity(1)
+                                    .maxSize(3)
+                                    .minSize(1)
+                                    .launchTemplate(GroupLaunchTemplateArgs.builder()
+                                            .id(launchTemplate.id())
+                                            .version("$Latest")
+                                            .build())
+                                    .tags(
+                                            GroupTagArgs.builder()
+                                                    .key("Name")
+                                                    .value("csye6225_asg")
+                                                    .propagateAtLaunch(true)
+                                                    .build())
+                                    .defaultCooldown(60)
+                                    .build());
+
+                            // create auto scaling policy,Scale up policy when average CPU usage is above 5%. Increment by 1
+                            var scaleUpPolicy = new Policy("scaleUpPolicy", PolicyArgs.builder()
+                                    .name("scaleUpPolicy")
+                                    .autoscalingGroupName(appAutoScalingGroup.name())
+                                    .adjustmentType("ChangeInCapacity")
+                                    .scalingAdjustment(1)
+                                    .cooldown(60)
+                                    .build());
+
+                            // create auto scaling policy,Scale down policy when average CPU usage is below 3%. Decrement by 1
+                            var scaleDownPolicy = new Policy("scaleDownPolicy", PolicyArgs.builder()
+                                    .name("scaleDownPolicy")
+                                    .autoscalingGroupName(appAutoScalingGroup.name())
+                                    .adjustmentType("ChangeInCapacity")
+                                    .scalingAdjustment(-1)
+                                    .cooldown(60)
+                                    .build());
+
+
+                            appAutoScalingGroup.name().apply(name -> {
+                                // create a cloudwatch alarm, Scale up policy when average CPU usage is above 5%. Increment by 1
+                                var scaleUpAlarm = new MetricAlarm("scaleUpAlarm", MetricAlarmArgs.builder()
+                                        .name("scaleUpAlarm")
+                                        .metricName("CPUUtilization")
+                                        .alarmDescription("Scale up policy when average CPU usage is above 5%. Increment by 1")
+                                        .comparisonOperator("GreaterThanOrEqualToThreshold")
+                                        .insufficientDataActions()
+                                        .evaluationPeriods(1)
+                                        .metricName("CPUUtilization")
+                                        .namespace("AWS/EC2")
+                                        .period(60)
+                                        .statistic("Average")
+                                        .threshold(5.0)
+                                        .alarmActions(scaleUpPolicy.arn().applyValue(List::of))
+                                        .dimensions(Map.of("AutoScalingGroupName", name))
+                                        .build());
+
+                                // create auto scaling policy,Scale down policy when average CPU usage is below 3%. Decrement by 1
+                                var scaleDownAlarm = new MetricAlarm("scaleDownAlarm", MetricAlarmArgs.builder()
+                                        .name("scaleDownAlarm")
+                                        .metricName("CPUUtilization")
+                                        .alarmDescription("Scale down policy when average CPU usage is below 5%. Decrement by 1")
+                                        .comparisonOperator("LessThanOrEqualToThreshold")
+                                        .insufficientDataActions()
+                                        .evaluationPeriods(1)
+                                        .metricName("CPUUtilization")
+                                        .namespace("AWS/EC2")
+                                        .period(60)
+                                        .statistic("Average")
+                                        .threshold(3.0)
+                                        .alarmActions(scaleDownPolicy.arn().applyValue(List::of))
+                                        .dimensions(Map.of("AutoScalingGroupName", name))
+                                        .build());
+
+                                // create a app load balancer
+                                var loadBalancer = new LoadBalancer("appLoadBalancer", LoadBalancerArgs.builder()
+                                        .internal(false)
+                                        .loadBalancerType("application")
+                                        .securityGroups(loadBalancerSecurityGroup.id().applyValue(List::of))
+                                        .subnets(publicSubnetIds.applyValue(ids -> ids))
+                                        .build());
+
+                                // create a target group
+                                var targetGroup = new TargetGroup("appTargetGroup", TargetGroupArgs.builder()
+                                        .port(8080)
+                                        .protocol("HTTP")
+                                        .targetType("instance")
+                                        .vpcId(main.id())
+                                        .healthCheck(TargetGroupHealthCheckArgs.builder()
+                                                .path("/healthz")
+                                                .port("8080")
+                                                .protocol("HTTP")
+                                                .build())
+                                        .build());
+                                // create a listener
+                                var listener = new Listener("appListener", ListenerArgs.builder()
+                                        .loadBalancerArn(loadBalancer.arn())
+                                        .port(80)
+                                        .protocol("HTTP")
+                                        .defaultActions(ListenerDefaultActionArgs.builder()
+                                                .type("forward")
+                                                .targetGroupArn(targetGroup.arn())
+                                                .build())
+                                        .build());
+
+                                // Attach the load balancer to the Auto Scaling group
+                                var attachment = new Attachment("asgAttachment", AttachmentArgs.builder()
+                                        .lbTargetGroupArn(targetGroup.arn())
+                                        .autoscalingGroupName(appAutoScalingGroup.name())
+                                        .build());
+
+                                // create a route53 record
+                                Optional<String> hostedZoneId = config.get("zoneId");
+                                Optional<String> domainName = config.get("domainName");
+                                // check config
+                                if (hostedZoneId.isEmpty() || domainName.isEmpty()) {
+                                    throw new RuntimeException("zoneId and domainName must be configured");
+                                }
+                                // get config value to string
+                                String zoneId = hostedZoneId.get();
+                                String domainNameString = domainName.get();
+                                // create a route53 record
+                                var record =
                                         new Record(
-                                            "webapp",
-                                            RecordArgs.builder()
-                                                .zoneId(zoneId)
-                                                .name(domainNameString)
-                                                .type("A")
-                                                .ttl(60)
-                                                .records(Collections.singletonList(ip))
-                                                .build());
-                                    return Output.ofNullable(null);
-                                  });
+                                                "webapp",
+                                                RecordArgs.builder()
+                                                        .zoneId(zoneId)
+                                                        .name(domainNameString)
+                                                        .type("A")
+                                                        .aliases(RecordAliasArgs.builder()
+                                                                .name(loadBalancer.dnsName())
+                                                                .zoneId(loadBalancer.zoneId())
+                                                                .evaluateTargetHealth(true)
+                                                                .build())
+                                                        .build());
 
+                                return Output.ofNullable(null);
+                            });
+//                          webappInstance
+//                              .publicIp()
+//                              .apply(
+//                                  ip -> {
+//                                      Optional<String> hostedZoneId = config.get("zoneId");
+//                                      Optional<String> domainName = config.get("domainName");
+//                                      // check config
+//                                        if (hostedZoneId.isEmpty() || domainName.isEmpty()) {
+//                                            throw new RuntimeException("zoneId and domainName must be configured");
+//                                        }
+//                                        // get config value to string
+//                                        String zoneId = hostedZoneId.get();
+//                                        String domainNameString = domainName.get();
+//                                    // create a route53 record
+//                                    var record =
+//                                        new Record(
+//                                            "webapp",
+//                                            RecordArgs.builder()
+//                                                .zoneId(zoneId)
+//                                                .name(domainNameString)
+//                                                .type("A")
+//                                                .ttl(60)
+//                                                .records(Collections.singletonList(ip))
+//                                                .build());
+//                                    return Output.ofNullable(null);
+//                                  });
                           return Output.ofNullable(null);
                         });
-                return null;
+                return Output.ofNullable(null);
               });
-          return null;
+          return Output.ofNullable(null);
         });
     }
 }
