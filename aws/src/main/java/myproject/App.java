@@ -2,6 +2,8 @@ package myproject;
 
 import com.pulumi.Context;
 import com.pulumi.Pulumi;
+import com.pulumi.asset.FileArchive;
+import com.pulumi.asset.FileAsset;
 import com.pulumi.aws.AwsFunctions;
 import com.pulumi.aws.alb.*;
 import com.pulumi.aws.alb.inputs.ListenerDefaultActionArgs;
@@ -15,10 +17,15 @@ import com.pulumi.aws.autoscaling.inputs.GroupLaunchTemplateArgs;
 import com.pulumi.aws.autoscaling.inputs.GroupTagArgs;
 import com.pulumi.aws.cloudwatch.MetricAlarm;
 import com.pulumi.aws.cloudwatch.MetricAlarmArgs;
+import com.pulumi.aws.dynamodb.Table;
+import com.pulumi.aws.dynamodb.TableArgs;
+import com.pulumi.aws.dynamodb.inputs.TableAttributeArgs;
 import com.pulumi.aws.ec2.*;
 import com.pulumi.aws.ec2.inputs.*;
 import com.pulumi.aws.iam.*;
 import com.pulumi.aws.inputs.GetAvailabilityZonesArgs;
+import com.pulumi.aws.lambda.*;
+import com.pulumi.aws.lambda.inputs.FunctionEnvironmentArgs;
 import com.pulumi.aws.rds.ParameterGroup;
 import com.pulumi.aws.rds.ParameterGroupArgs;
 import com.pulumi.aws.rds.SubnetGroup;
@@ -27,7 +34,17 @@ import com.pulumi.aws.rds.inputs.ParameterGroupParameterArgs;
 import com.pulumi.aws.route53.Record;
 import com.pulumi.aws.route53.RecordArgs;
 import com.pulumi.aws.route53.inputs.RecordAliasArgs;
+import com.pulumi.aws.s3.Bucket;
+import com.pulumi.aws.s3.BucketObject;
+import com.pulumi.aws.s3.BucketObjectArgs;
+import com.pulumi.aws.sns.Topic;
+import com.pulumi.aws.sns.TopicArgs;
+import com.pulumi.aws.sns.TopicSubscription;
+import com.pulumi.aws.sns.TopicSubscriptionArgs;
 import com.pulumi.core.Output;
+import com.pulumi.gcp.serviceaccount.*;
+import com.pulumi.gcp.storage.BucketIAMBinding;
+import com.pulumi.gcp.storage.BucketIAMBindingArgs;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -498,7 +515,10 @@ public class App {
                                                           jsonObject(
                                                                   jsonProperty("Effect", "Allow"),
                                                                   jsonProperty("Principal", jsonObject(
-                                                                          jsonProperty("Service", "ec2.amazonaws.com")
+                                                                          jsonProperty("Service", jsonArray(
+                                                                                  "ec2.amazonaws.com",
+                                                                                        "lambda.amazonaws.com"
+                                                                          ))
                                                                   )),
                                                                   jsonProperty("Action", "sts:AssumeRole")
                                                           )
@@ -525,7 +545,19 @@ public class App {
                                                                                     "logs:DescribeLogStreams",
                                                                                     "logs:DescribeLogGroups",
                                                                                     "logs:CreateLogStream",
-                                                                                    "logs:CreateLogGroup"
+                                                                                    "logs:CreateLogGroup",
+                                                                                    "SNS:Subscribe",
+                                                                                    "SNS:SetTopicAttributes",
+                                                                                    "SNS:RemovePermission",
+                                                                                    "SNS:Receive",
+                                                                                    "SNS:Publish",
+                                                                                    "SNS:ListSubscriptionsByTopic",
+                                                                                    "SNS:GetTopicAttributes",
+                                                                                    "SNS:DeleteTopic",
+                                                                                    "SNS:AddPermission",
+                                                                                    "SNS:ListTopics",
+                                                                                    "dynamodb:*",
+                                                                                    "ses:*"
                                                                             )),
                                                                             jsonProperty("Resource", "*")
                                                                     ),
@@ -746,34 +778,127 @@ public class App {
                                                                 .build())
                                                         .build());
 
+                                // get gcp config
+                                Optional<String> accountNameConfig = config.get("gcpAccountName");
+                                Optional<String> projectID = config.get("projectID");
+                                // check config
+                                if(accountNameConfig.isEmpty() || projectID.isEmpty()) {
+                                    throw new RuntimeException("accountName must be configured");
+                                }
+                                // get config value to string
+                                String accountName = accountNameConfig.get();
+                                String projectIDString = projectID.get();
+
+                                // gcp service account
+                                var serviceAccount = new Account("serviceAccount", AccountArgs.builder()
+                                        .displayName(accountName)
+                                        .accountId(accountName)
+                                        .project(projectIDString)
+                                        .build());
+
+                                // bind Storage Object User role to service account
+                                var serviceAccountEmail = serviceAccount.email();
+
+                                serviceAccountEmail.applyValue(
+
+                                        email -> {
+
+                                            // bind service account  role to service account
+                                            var serviceAccountRole = new BucketIAMBinding("serviceAccountRole", BucketIAMBindingArgs.builder()
+                                                    .bucket("csye6225-demo-bucket")
+                                                    .role("roles/storage.admin")
+                                                    .members(Collections.singletonList("serviceAccount:" + email))
+                                                    .build());
+
+                                            // create access key
+                                            var serviceAccountKey = new Key("serviceAccountKey", KeyArgs.builder()
+                                                    .serviceAccountId(serviceAccount.name())
+                                                    .publicKeyType("TYPE_X509_PEM_FILE")
+                                                    .build());
+
+                                            // get private key
+                                            var serviceAccountKeySecret = serviceAccountKey.privateKey();
+                                            serviceAccountKeySecret.applyValue(
+                                                    secret -> {
+
+                                                        // Create DynamoDB table
+                                                        var emailTable = new Table("emailTrackingTable", TableArgs.builder()
+                                                                .name("emailTrackingTable")
+                                                                .attributes(
+                                                                        TableAttributeArgs.builder()
+                                                                                .name("email")
+                                                                                .type("S")
+                                                                                .build(),
+                                                                        TableAttributeArgs.builder()
+                                                                                .name("timestamp")
+                                                                                .type("S")
+                                                                                .build()
+                                                                )
+                                                                .hashKey("email")
+                                                                .rangeKey("timestamp")
+                                                                .billingMode("PAY_PER_REQUEST")
+                                                                .build());
+
+                                                        // Create Amazon Simple Notification Service (Amazon SNS) topic creation
+                                                        var topic = new Topic("csye6225", TopicArgs.builder()
+                                                                .displayName("csye6225")
+                                                                .build());
+
+                                                        // send topic info to userdata
+                                                        topic.urn().applyValue(
+                                                                urn -> {
+
+                                                                    // join urn to userdata
+                                                                    String userDataWithTopic = userData + "\n" + "export TOPIC_INFO=" + urn;
+
+                                                                    // create s3 bucket
+                                                                    var s3Bucket = new Bucket("myBucket");
+
+                                                                    // upload file to s3 bucket
+                                                                    var s3BucketObject = new BucketObject("myJar", BucketObjectArgs.builder()
+                                                                            .bucket(s3Bucket.id())
+                                                                            .source(new FileAsset("/Users/jason/Documents/GitHub/CSYE6225/iac-pulumi/aws/src/main/resources/lambda_function-1.0-SNAPSHOT.jar"))
+                                                                            .build());
+
+                                                                    // create a s3 key
+                                                                    var s3Key = s3BucketObject.key();
+
+                                                                    // Create Lambda function to download file
+                                                                    var lambdaFunction = new Function("myLambdaFunction", FunctionArgs.builder()
+                                                                            .runtime("java17")
+                                                                            .role(logRole.arn())
+                                                                            .timeout(30)
+                                                                            .handler("northeastern.xiaosongzhai.SnsEventHandler::handleRequest")
+                                                                            .s3Bucket(s3Bucket.id())
+                                                                            .s3Key(s3Key)
+                                                                            .environment(FunctionEnvironmentArgs.builder()
+                                                                                    .variables(Map.of("gcpCredentialsSecret", secret, "apiKay", "md-I0Fu5zDQVE7oIfOH9gxaPg"))
+                                                                                    .build())
+                                                                            .build());
+
+                                                                    // Create sns subscription
+                                                                    var subscription = new TopicSubscription("subscription", TopicSubscriptionArgs.builder()
+                                                                            .protocol("lambda")
+                                                                            .endpoint(lambdaFunction.arn())
+                                                                            .topic(topic.arn())
+                                                                            .build());
+
+                                                                    // sns trigger lambda function
+                                                                    var permission = new Permission("triggerLambda", PermissionArgs.builder()
+                                                                            .action("lambda:InvokeFunction")
+                                                                            .function(lambdaFunction.arn())
+                                                                            .principal("sns.amazonaws.com")
+                                                                            .sourceArn(topic.arn())
+                                                                            .build());
+
+                                                                    return Output.ofNullable(null);
+                                                                });
+                                                        return Output.ofNullable(null);
+                                                    });
+                                            return Output.ofNullable(null);
+                                        });
                                 return Output.ofNullable(null);
                             });
-//                          webappInstance
-//                              .publicIp()
-//                              .apply(
-//                                  ip -> {
-//                                      Optional<String> hostedZoneId = config.get("zoneId");
-//                                      Optional<String> domainName = config.get("domainName");
-//                                      // check config
-//                                        if (hostedZoneId.isEmpty() || domainName.isEmpty()) {
-//                                            throw new RuntimeException("zoneId and domainName must be configured");
-//                                        }
-//                                        // get config value to string
-//                                        String zoneId = hostedZoneId.get();
-//                                        String domainNameString = domainName.get();
-//                                    // create a route53 record
-//                                    var record =
-//                                        new Record(
-//                                            "webapp",
-//                                            RecordArgs.builder()
-//                                                .zoneId(zoneId)
-//                                                .name(domainNameString)
-//                                                .type("A")
-//                                                .ttl(60)
-//                                                .records(Collections.singletonList(ip))
-//                                                .build());
-//                                    return Output.ofNullable(null);
-//                                  });
                           return Output.ofNullable(null);
                         });
                 return Output.ofNullable(null);

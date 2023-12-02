@@ -33,5 +33,9 @@ config:
   aws-pulumi-setup:zoneId: Z02624651UAF02V5R5M8F
   aws-pulumi-setup:domainName: dev.mrjello.me
   # AMI config
-  aws-pulumi-setup:amiId: ami-01af5165f35292c51
+  aws-pulumi-setup:amiId: ami-0aa4e6f48d0a5ade6
   aws:region: us-west-2
+  # gcp config
+  gcp:project: csye6225-dev-406000
+  aws-pulumi-setup:gcpAccountName: dev-account
+  aws-pulumi-setup:projectID: csye6225-dev-406000

@@ -1,7 +1,21 @@
 encryptionsalt: v1:ZDPrFiylQz0=:v1:o3sIyOAnkJ7iMrEy:4QMpF5kuMj3OMto0q5B8e76fdKqCLg==
 config:
+  # AMI config
+  aws-pulumi-setup:amiId: ami-0aa4e6f48d0a5ade6
   # vpc config
   aws-pulumi-setup:cidrBlock: 10.0.0.0/16
+  aws-pulumi-setup:dbInstanceClass: db.t2.micro
+  aws-pulumi-setup:dbInstanceName: csye6225
+  aws-pulumi-setup:dbMasterPassword: zxs123123
+  aws-pulumi-setup:dbMasterUsername: csye6225
+  aws-pulumi-setup:dbParameterGroupFamily: mariadb10.4
+  # db parameter group config
+  aws-pulumi-setup:dbParameterGroupName: mariadb-parameter-group
+  aws-pulumi-setup:dbSgTagNameValue: database-security-group
+  # mariadb config
+  aws-pulumi-setup:dbTagNameKey: Name
+  aws-pulumi-setup:dbTagNameValue: csye6225
+  aws-pulumi-setup:domainName: demo.mrjello.me
   # internet gateway config
   aws-pulumi-setup:igwTagNameKey: Name
   aws-pulumi-setup:igwTagNameValue: my-igw
@@ -11,27 +25,17 @@ config:
   aws-pulumi-setup:publicSubnetTagNameValue: my-public-subnet
   # route table config
   aws-pulumi-setup:rtTagNameKey: Name
+  # security group config
+  aws-pulumi-setup:sgTagNameKey: Name
+  aws-pulumi-setup:sgTagNameValue: application-security-group
   # subnet config
   aws-pulumi-setup:subnetTagNameKey: Name
   aws-pulumi-setup:vpcTagNameKey: Name
   aws-pulumi-setup:vpcTagNameValue: my-vpc
-  # security group config
-  aws-pulumi-setup:sgTagNameKey: Name
-  aws-pulumi-setup:sgTagNameValue: application-security-group
-  aws-pulumi-setup:dbSgTagNameValue: database-security-group
-  # db parameter group config
-  aws-pulumi-setup:dbParameterGroupName: mariadb-parameter-group
-  aws-pulumi-setup:dbParameterGroupFamily: mariadb10.4
-  # mariadb config
-  aws-pulumi-setup:dbTagNameKey: Name
-  aws-pulumi-setup:dbTagNameValue: csye6225
-  aws-pulumi-setup:dbInstanceName: csye6225
-  aws-pulumi-setup:dbInstanceClass: db.t2.micro
-  aws-pulumi-setup:dbMasterUsername: csye6225
-  aws-pulumi-setup:dbMasterPassword: zxs123123
   # record set config
   aws-pulumi-setup:zoneId: Z0385460J8NZBL4108D7
-  aws-pulumi-setup:domainName: demo.mrjello.me
-  # AMI config
-  aws-pulumi-setup:amiId: ami-01af5165f35292c51
   aws:region: us-west-2
+  # gcp config
+  gcp:project: csye6225-demo-406000
+  aws-pulumi-setup:gcpAccountName: demo-account
+  aws-pulumi-setup:projectID: csye6225-demo-406000
