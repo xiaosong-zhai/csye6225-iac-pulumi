@@ -821,24 +821,6 @@ public class App {
                                             serviceAccountKeySecret.applyValue(
                                                     secret -> {
 
-                                                        // Create DynamoDB table
-                                                        var emailTable = new Table("emailTrackingTable", TableArgs.builder()
-                                                                .name("emailTrackingTable")
-                                                                .attributes(
-                                                                        TableAttributeArgs.builder()
-                                                                                .name("email")
-                                                                                .type("S")
-                                                                                .build(),
-                                                                        TableAttributeArgs.builder()
-                                                                                .name("timestamp")
-                                                                                .type("S")
-                                                                                .build()
-                                                                )
-                                                                .hashKey("email")
-                                                                .rangeKey("timestamp")
-                                                                .billingMode("PAY_PER_REQUEST")
-                                                                .build());
-
                                                         // Create Amazon Simple Notification Service (Amazon SNS) topic creation
                                                         var topic = new Topic("csye6225", TopicArgs.builder()
                                                                 .displayName("csye6225")
