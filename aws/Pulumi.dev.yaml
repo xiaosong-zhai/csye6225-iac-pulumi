@@ -29,6 +29,13 @@ config:
   aws-pulumi-setup:dbInstanceClass: db.t2.micro
   aws-pulumi-setup:dbMasterUsername: csye6225
   aws-pulumi-setup:dbMasterPassword: zxs123123
+  # record set config
+  aws-pulumi-setup:zoneId: Z02624651UAF02V5R5M8F
+  aws-pulumi-setup:domainName: dev.mrjello.me
   # AMI config
-  aws-pulumi-setup:amiId: ami-0dbdef91cd8917b9f
+  aws-pulumi-setup:amiId: ami-0aa4e6f48d0a5ade6
   aws:region: us-west-2
+  # gcp config
+  gcp:project: csye6225-dev-406000
+  aws-pulumi-setup:gcpAccountName: dev-account
+  aws-pulumi-setup:projectID: csye6225-dev-406000
