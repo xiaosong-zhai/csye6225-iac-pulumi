@@ -225,39 +225,44 @@ public class App {
           String sgTagName = securityGroupTagNameKey.get();
           String sgTagNameValue = securityGroupTagNameValue.get();
 
-          var loadBalancerSecurityGroup
-                  = new SecurityGroup(
-                          "loadBalancerSecurityGroup",
-                                SecurityGroupArgs.builder()
-                                  .vpcId(main.id())
-                                  .description("Security group for load balancer")
-                                  .ingress(
-                                          Arrays.asList(
-                                                  SecurityGroupIngressArgs.builder()
-                                                          .description("HTTP")
-                                                          .fromPort(80)
-                                                          .toPort(80)
-                                                          .protocol("tcp")
-                                                          .cidrBlocks("0.0.0.0/0")
-                                                          .build(),
-                                                  SecurityGroupIngressArgs.builder()
-                                                          .description("HTTPS")
-                                                          .fromPort(443)
-                                                          .toPort(443)
-                                                          .protocol("tcp")
-                                                          .cidrBlocks("0.0.0.0/0")
-                                                          .build()))
-                                        .egress(
-                                                SecurityGroupEgressArgs.builder()
-                                                        .fromPort(0)
-                                                        .toPort(0)
-                                                        .protocol("-1")
-                                                        .cidrBlocks("0.0.0.0/0")
-                                                        .ipv6CidrBlocks("::/0")
-                                                        .build())
-                                  .tags(Map.of("name", "loadBalancerSecurityGroup"))
-                                  .build());
-
+          var loadBalancerSecurityGroup =
+              new SecurityGroup(
+                  "loadBalancerSecurityGroup",
+                  SecurityGroupArgs.builder()
+                      .vpcId(main.id())
+                      .description("Security group for load balancer")
+                      .ingress(
+                          Collections.singletonList(
+                              //
+                              // SecurityGroupIngressArgs.builder()
+                              //
+                              // .description("HTTP")
+                              //
+                              // .fromPort(80)
+                              //
+                              // .toPort(80)
+                              //
+                              // .protocol("tcp")
+                              //
+                              // .cidrBlocks("0.0.0.0/0")
+                              //                                                          .build(),
+                              SecurityGroupIngressArgs.builder()
+                                  .description("HTTPS")
+                                  .fromPort(443)
+                                  .toPort(443)
+                                  .protocol("tcp")
+                                  .cidrBlocks("0.0.0.0/0")
+                                  .build()))
+                      .egress(
+                          SecurityGroupEgressArgs.builder()
+                              .fromPort(0)
+                              .toPort(0)
+                              .protocol("-1")
+                              .cidrBlocks("0.0.0.0/0")
+                              .ipv6CidrBlocks("::/0")
+                              .build())
+                      .tags(Map.of("name", "loadBalancerSecurityGroup"))
+                      .build());
 
           var appSecurityGroup =
               new SecurityGroup(
@@ -279,7 +284,8 @@ public class App {
                                   .fromPort(8080) // replace with your application port
                                   .toPort(8080) // replace with your application port
                                   .protocol("tcp")
-                                  .securityGroups(loadBalancerSecurityGroup.id().applyValue(List::of))
+                                  .securityGroups(
+                                      loadBalancerSecurityGroup.id().applyValue(List::of))
                                   .build()))
                       .egress(
                           SecurityGroupEgressArgs.builder()
@@ -407,7 +413,7 @@ public class App {
                     Output.all(
                         privateSubnets.stream().map(Subnet::id).collect(Collectors.toList()));
 
-                  var publicSubnetIds =
+                var publicSubnetIds =
                     Output.all(publicSubnets.stream().map(Subnet::id).collect(Collectors.toList()));
 
                 var dbPrivateSubnetGroup =
@@ -443,423 +449,589 @@ public class App {
                     .apply(
                         address -> {
 
-                                // get gcp config
-                                Optional<String> accountNameConfig = config.get("gcpAccountName");
-                                Optional<String> projectID = config.get("projectID");
-                                // check config
-                                if(accountNameConfig.isEmpty() || projectID.isEmpty()) {
-                                    throw new RuntimeException("accountName must be configured");
-                                }
-                                // get config value to string
-                                String accountName = accountNameConfig.get();
-                                String projectIDString = projectID.get();
+                          // get gcp config
+                          Optional<String> accountNameConfig = config.get("gcpAccountName");
+                          Optional<String> projectID = config.get("projectID");
+                          // check config
+                          if (accountNameConfig.isEmpty() || projectID.isEmpty()) {
+                            throw new RuntimeException("accountName must be configured");
+                          }
+                          // get config value to string
+                          String accountName = accountNameConfig.get();
+                          String projectIDString = projectID.get();
 
-                                // gcp service account
-                                var serviceAccount = new Account("serviceAccount", AccountArgs.builder()
-                                        .displayName(accountName)
-                                        .accountId(accountName)
-                                        .project(projectIDString)
-                                        .build());
+                          // gcp service account
+                          var serviceAccount =
+                              new Account(
+                                  "serviceAccount",
+                                  AccountArgs.builder()
+                                      .displayName(accountName)
+                                      .accountId(accountName)
+                                      .project(projectIDString)
+                                      .build());
 
-                                // bind Storage Object User role to service account
-                                var serviceAccountEmail = serviceAccount.email();
+                          // bind Storage Object User role to service account
+                          var serviceAccountEmail = serviceAccount.email();
 
-                                serviceAccountEmail.applyValue(
+                          serviceAccountEmail.applyValue(
+                              email -> {
 
-                                        email -> {
+                                // bind service account  role to service account
+                                var serviceAccountRole =
+                                    new BucketIAMMember(
+                                        "serviceAccountRole",
+                                        BucketIAMMemberArgs.builder()
+                                            .bucket("csye6225-demo-bucket")
+                                            .role("roles/storage.objectUser")
+                                            .member("serviceAccount:" + email)
+                                            .build());
 
-                                            // bind service account  role to service account
-                                            var serviceAccountRole = new BucketIAMMember("serviceAccountRole", BucketIAMMemberArgs.builder()
-                                                    .bucket("csye6225-demo-bucket")
-                                                    .role("roles/storage.objectUser")
-                                                    .member("serviceAccount:" + email)
-                                                    .build());
+                                // create access key
+                                var serviceAccountKey =
+                                    new Key(
+                                        "serviceAccountKey",
+                                        KeyArgs.builder()
+                                            .serviceAccountId(serviceAccount.name())
+                                            .publicKeyType("TYPE_X509_PEM_FILE")
+                                            .build());
 
-                                            // create access key
-                                            var serviceAccountKey = new Key("serviceAccountKey", KeyArgs.builder()
-                                                    .serviceAccountId(serviceAccount.name())
-                                                    .publicKeyType("TYPE_X509_PEM_FILE")
-                                                    .build());
+                                // get private key
+                                var serviceAccountKeySecret = serviceAccountKey.privateKey();
+                                serviceAccountKeySecret.applyValue(
+                                    secret -> {
 
-                                            // get private key
-                                            var serviceAccountKeySecret = serviceAccountKey.privateKey();
-                                            serviceAccountKeySecret.applyValue(
-                                                    secret -> {
+                                      // Create Amazon Simple Notification Service (Amazon SNS)
+                                      // topic creation
+                                      var topic =
+                                          new Topic(
+                                              "csye6225",
+                                              TopicArgs.builder().displayName("csye6225").build());
 
-                                                        // Create Amazon Simple Notification Service (Amazon SNS) topic creation
-                                                        var topic = new Topic("csye6225", TopicArgs.builder()
-                                                                .displayName("csye6225")
-                                                                .build());
+                                      // send topic info to userdata
+                                      topic
+                                          .urn()
+                                          .applyValue(
+                                              urn -> {
+                                                // create UserData script
+                                                String cloudWatchAgentSetup =
+                                                    String.join(
+                                                        "\n",
+                                                        "sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n"
+                                                            + "    -a fetch-config \\\n"
+                                                            + "    -m ec2 \\\n"
+                                                            + "    -c file:/opt/cloudwatch-config.json \\\n"
+                                                            + "    -s\ns");
 
-                                                        // send topic info to userdata
-                                                        topic.urn().applyValue(
-                                                                urn -> {
-                                                                    // create UserData script
-                                                                    String cloudWatchAgentSetup =
-                                                                            String.join(
-                                                                                    "\n",
-                                                                                    "sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n"
-                                                                                            + "    -a fetch-config \\\n"
-                                                                                            + "    -m ec2 \\\n"
-                                                                                            + "    -c file:/opt/cloudwatch-config.json \\\n"
-                                                                                            + "    -s\ns");
+                                                // join urn to userdata
+                                                String userDataWithTopic =
+                                                    String.join("\n", "TopicInfo=" + urn);
 
-                                                                    // join urn to userdata
-                                                                    String userDataWithTopic =
-                                                                            String.join(
-                                                                            "\n",
-                                                                                    "TopicInfo=" + urn
-                                                                            );
+                                                String userData =
+                                                    String.join(
+                                                        "\n",
+                                                        "#!/bin/bash",
+                                                        "sudo groupadd csye6225",
+                                                        "sudo useradd -s /bin/false -g csye6225 -d /opt/csye6225 -m csye6225",
+                                                        "cat > /opt/csye6225/application-demo.yml <<EOL",
+                                                        "server:",
+                                                        "  port: 8080",
+                                                        "spring:",
+                                                        "  application:",
+                                                        "    name: csye6225",
+                                                        "  profiles:",
+                                                        "    active: demo",
+                                                        "  main:",
+                                                        "    allow-circular-references: true",
+                                                        "  datasource:",
+                                                        "    driver-class-name: org.mariadb.jdbc.Driver",
+                                                        "    url: jdbc:mariadb://"
+                                                            + address
+                                                            + ":3306/csye6225?createDatabaseIfNotExist=true",
+                                                        "    username: " + dbMasterUsernameString,
+                                                        "    password: " + dbMasterPasswordString,
+                                                        "  jpa:",
+                                                        "    hibernate:",
+                                                        "      ddl-auto: update",
+                                                        "    properties:",
+                                                        "      hibernate:",
+                                                        "        show_sql: true",
+                                                        "        format_sql: true",
+                                                        "        dialect: org.hibernate.dialect.MariaDBDialect",
+                                                        "    database-platform: org.hibernate.dialect.MariaDBDialect",
+                                                        "csv:",
+                                                        "  file:",
+                                                        "    # path: \"classpath:static/users.csv\"",
+                                                        "    path: \"file:/opt/csye6225/users.csv\"",
+                                                        "EOL",
+                                                        "sudo mv /opt/webapp.jar /opt/csye6225/webapp.jar",
+                                                        "sudo mv /opt/users.csv /opt/csye6225/users.csv",
+                                                        "sudo chown csye6225:csye6225 /opt/csye6225/webapp.jar",
+                                                        "sudo chown csye6225:csye6225 /opt/csye6225/users.csv",
+                                                        "sudo chown csye6225:csye6225 /opt/csye6225/application-demo.yml",
+                                                        "sudo touch /var/log/csye6225.log",
+                                                        "sudo chown csye6225:csye6225 /var/log/csye6225.log",
+                                                        "sudo chmod u+rw,g+rw /var/log/csye6225.log",
+                                                        "sudo systemctl enable /etc/systemd/system/csye6225.service",
+                                                        "sudo systemctl start csye6225.service",
+                                                        "sudo systemctl enable amazon-cloudwatch-agent",
+                                                        cloudWatchAgentSetup,
+                                                        userDataWithTopic);
 
-                                                                    String userData =
-                                                                            String.join(
-                                                                                    "\n",
-                                                                                    "#!/bin/bash",
-                                                                                    "sudo groupadd csye6225",
-                                                                                    "sudo useradd -s /bin/false -g csye6225 -d /opt/csye6225 -m csye6225",
-                                                                                    "cat > /opt/csye6225/application-demo.yml <<EOL",
-                                                                                    "server:",
-                                                                                    "  port: 8080",
-                                                                                    "spring:",
-                                                                                    "  application:",
-                                                                                    "    name: csye6225",
-                                                                                    "  profiles:",
-                                                                                    "    active: demo",
-                                                                                    "  main:",
-                                                                                    "    allow-circular-references: true",
-                                                                                    "  datasource:",
-                                                                                    "    driver-class-name: org.mariadb.jdbc.Driver",
-                                                                                    "    url: jdbc:mariadb://"
-                                                                                            + address
-                                                                                            + ":3306/csye6225?createDatabaseIfNotExist=true",
-                                                                                    "    username: " + dbMasterUsernameString,
-                                                                                    "    password: " + dbMasterPasswordString,
-                                                                                    "  jpa:",
-                                                                                    "    hibernate:",
-                                                                                    "      ddl-auto: update",
-                                                                                    "    properties:",
-                                                                                    "      hibernate:",
-                                                                                    "        show_sql: true",
-                                                                                    "        format_sql: true",
-                                                                                    "        dialect: org.hibernate.dialect.MariaDBDialect",
-                                                                                    "    database-platform: org.hibernate.dialect.MariaDBDialect",
-                                                                                    "csv:",
-                                                                                    "  file:",
-                                                                                    "    # path: \"classpath:static/users.csv\"",
-                                                                                    "    path: \"file:/opt/csye6225/users.csv\"",
-                                                                                    "EOL",
-                                                                                    "sudo mv /opt/webapp.jar /opt/csye6225/webapp.jar",
-                                                                                    "sudo mv /opt/users.csv /opt/csye6225/users.csv",
-                                                                                    "sudo chown csye6225:csye6225 /opt/csye6225/webapp.jar",
-                                                                                    "sudo chown csye6225:csye6225 /opt/csye6225/users.csv",
-                                                                                    "sudo chown csye6225:csye6225 /opt/csye6225/application-demo.yml",
-                                                                                    "sudo touch /var/log/csye6225.log",
-                                                                                    "sudo chown csye6225:csye6225 /var/log/csye6225.log",
-                                                                                    "sudo chmod u+rw,g+rw /var/log/csye6225.log",
-                                                                                    "sudo systemctl enable /etc/systemd/system/csye6225.service",
-                                                                                    "sudo systemctl start csye6225.service",
-                                                                                    "sudo systemctl enable amazon-cloudwatch-agent",
-                                                                                    cloudWatchAgentSetup,
-                                                                                    userDataWithTopic
-                                                                            );
+                                                // create ec2 service role and add
+                                                // CloudWatchAgentServerPolicy
+                                                var logRole =
+                                                    new Role(
+                                                        "logRole",
+                                                        RoleArgs.builder()
+                                                            .assumeRolePolicy(
+                                                                serializeJson(
+                                                                    jsonObject(
+                                                                        jsonProperty(
+                                                                            "Version",
+                                                                            "2012-10-17"),
+                                                                        jsonProperty(
+                                                                            "Statement",
+                                                                            jsonArray(
+                                                                                jsonObject(
+                                                                                    jsonProperty(
+                                                                                        "Effect",
+                                                                                        "Allow"),
+                                                                                    jsonProperty(
+                                                                                        "Principal",
+                                                                                        jsonObject(
+                                                                                            jsonProperty(
+                                                                                                "Service",
+                                                                                                jsonArray(
+                                                                                                    "ec2.amazonaws.com",
+                                                                                                    "lambda.amazonaws.com")))),
+                                                                                    jsonProperty(
+                                                                                        "Action",
+                                                                                        "sts:AssumeRole")))))))
+                                                            .build());
 
-                                                                    // create ec2 service role and add CloudWatchAgentServerPolicy
-                                                                    var logRole = new Role("logRole", RoleArgs.builder()
-                                                                            .assumeRolePolicy(serializeJson(
-                                                                                    jsonObject(
-                                                                                            jsonProperty("Version", "2012-10-17"),
-                                                                                            jsonProperty("Statement", jsonArray(
-                                                                                                    jsonObject(
-                                                                                                            jsonProperty("Effect", "Allow"),
-                                                                                                            jsonProperty("Principal", jsonObject(
-                                                                                                                    jsonProperty("Service", jsonArray(
-                                                                                                                            "ec2.amazonaws.com",
-                                                                                                                            "lambda.amazonaws.com"
-                                                                                                                    ))
-                                                                                                            )),
-                                                                                                            jsonProperty("Action", "sts:AssumeRole")
-                                                                                                    )
-                                                                                            ))
-                                                                                    ))
-                                                                            )
-                                                                            .build());
+                                                var logPolicy =
+                                                    new RolePolicy(
+                                                        "logPolicy",
+                                                        RolePolicyArgs.builder()
+                                                            .role(logRole.id())
+                                                            .policy(
+                                                                serializeJson(
+                                                                    jsonObject(
+                                                                        jsonProperty(
+                                                                            "Version",
+                                                                            "2012-10-17"),
+                                                                        jsonProperty(
+                                                                            "Statement",
+                                                                            jsonArray(
+                                                                                jsonObject(
+                                                                                    jsonProperty(
+                                                                                        "Effect",
+                                                                                        "Allow"),
+                                                                                    jsonProperty(
+                                                                                        "Action",
+                                                                                        jsonArray(
+                                                                                            "cloudwatch:PutMetricData",
+                                                                                            "ec2:DescribeVolumes",
+                                                                                            "ec2:DescribeTags",
+                                                                                            "logs:PutLogEvents",
+                                                                                            "logs:DescribeLogStreams",
+                                                                                            "logs:DescribeLogGroups",
+                                                                                            "logs:CreateLogStream",
+                                                                                            "logs:CreateLogGroup",
+                                                                                            "SNS:Subscribe",
+                                                                                            "SNS:SetTopicAttributes",
+                                                                                            "SNS:RemovePermission",
+                                                                                            "SNS:Publish",
+                                                                                            "SNS:ListSubscriptionsByTopic",
+                                                                                            "SNS:GetTopicAttributes",
+                                                                                            "SNS:DeleteTopic",
+                                                                                            "SNS:AddPermission",
+                                                                                            "SNS:ListTopics",
+                                                                                            "dynamodb:*",
+                                                                                            "lambda:*")),
+                                                                                    jsonProperty(
+                                                                                        "Resource",
+                                                                                        "*")),
+                                                                                jsonObject(
+                                                                                    jsonProperty(
+                                                                                        "Effect",
+                                                                                        "Allow"),
+                                                                                    jsonProperty(
+                                                                                        "Action",
+                                                                                        jsonArray(
+                                                                                            "ssm:GetParameter")),
+                                                                                    jsonProperty(
+                                                                                        "Resource",
+                                                                                        "arn:aws:ssm:*:*:parameter/AmazonCloudWatch-*")))))))
+                                                            .build());
 
-                                                                    var logPolicy = new RolePolicy(
-                                                                            "logPolicy",
-                                                                            RolePolicyArgs.builder()
-                                                                                    .role(logRole.id())
-                                                                                    .policy(serializeJson(
-                                                                                            jsonObject(
-                                                                                                    jsonProperty("Version", "2012-10-17"),
-                                                                                                    jsonProperty("Statement", jsonArray(
-                                                                                                            jsonObject(
-                                                                                                                    jsonProperty("Effect", "Allow"),
-                                                                                                                    jsonProperty("Action", jsonArray(
-                                                                                                                            "cloudwatch:PutMetricData",
-                                                                                                                            "ec2:DescribeVolumes",
-                                                                                                                            "ec2:DescribeTags",
-                                                                                                                            "logs:PutLogEvents",
-                                                                                                                            "logs:DescribeLogStreams",
-                                                                                                                            "logs:DescribeLogGroups",
-                                                                                                                            "logs:CreateLogStream",
-                                                                                                                            "logs:CreateLogGroup",
-                                                                                                                            "SNS:Subscribe",
-                                                                                                                            "SNS:SetTopicAttributes",
-                                                                                                                            "SNS:RemovePermission",
-                                                                                                                            "SNS:Publish",
-                                                                                                                            "SNS:ListSubscriptionsByTopic",
-                                                                                                                            "SNS:GetTopicAttributes",
-                                                                                                                            "SNS:DeleteTopic",
-                                                                                                                            "SNS:AddPermission",
-                                                                                                                            "SNS:ListTopics",
-                                                                                                                            "dynamodb:*",
-                                                                                                                            "lambda:*"
-                                                                                                                    )),
-                                                                                                                    jsonProperty("Resource", "*")
-                                                                                                            ),
-                                                                                                            jsonObject(
-                                                                                                                    jsonProperty("Effect", "Allow"),
-                                                                                                                    jsonProperty("Action", jsonArray("ssm:GetParameter")),
-                                                                                                                    jsonProperty("Resource", "arn:aws:ssm:*:*:parameter/AmazonCloudWatch-*")
-                                                                                                            )
-                                                                                                    ))
-                                                                                            )
-                                                                                    ))
-                                                                                    .build()
-                                                                    );
+                                                // create ec2 instance profile
+                                                var instanceProfile =
+                                                    new InstanceProfile(
+                                                        "logInstanceProfile",
+                                                        InstanceProfileArgs.builder()
+                                                            .role(logRole.id())
+                                                            .build());
 
-                                                                    // create ec2 instance profile
-                                                                    var instanceProfile =
-                                                                            new InstanceProfile(
-                                                                                    "logInstanceProfile",
-                                                                                    InstanceProfileArgs.builder().role(logRole.id()).build());
+                                                // create a webapp instance
+                                                List<String> securityGroups =
+                                                    Collections.singletonList(id);
+                                                // create launch template used to create auto
+                                                // scaling groups.
+                                                var launchTemplate =
+                                                    new LaunchTemplate(
+                                                        "webappLaunchTemplate",
+                                                        LaunchTemplateArgs.builder()
+                                                            .namePrefix("webapp")
+                                                            .imageId(amiId)
+                                                            .instanceType("t2.micro")
+                                                            .iamInstanceProfile(
+                                                                LaunchTemplateIamInstanceProfileArgs
+                                                                    .builder()
+                                                                    .arn(instanceProfile.arn())
+                                                                    .build())
+                                                            .networkInterfaces(
+                                                                LaunchTemplateNetworkInterfaceArgs
+                                                                    .builder()
+                                                                    .associatePublicIpAddress(
+                                                                        String.valueOf(true))
+                                                                    .securityGroups(
+                                                                        appSecurityGroup
+                                                                            .id()
+                                                                            .applyValue(List::of))
+                                                                    .subnetId(
+                                                                        publicSubnets.get(0).id())
+                                                                    .subnetId(
+                                                                        publicSubnets.get(1).id())
+                                                                    .build())
+                                                            .keyName("test")
+                                                            .userData(
+                                                                Base64.getEncoder()
+                                                                    .encodeToString(
+                                                                        userData.getBytes()))
+                                                            .disableApiTermination(false)
+                                                            .instanceInitiatedShutdownBehavior(
+                                                                "terminate")
+                                                            .blockDeviceMappings(
+                                                                LaunchTemplateBlockDeviceMappingArgs
+                                                                    .builder()
+                                                                    .deviceName("/dev/xvda")
+                                                                    .ebs(
+                                                                        LaunchTemplateBlockDeviceMappingEbsArgs
+                                                                            .builder()
+                                                                            .volumeSize(25)
+                                                                            .volumeType("gp2")
+                                                                            .deleteOnTermination(
+                                                                                String.valueOf(
+                                                                                    true))
+                                                                            .build())
+                                                                    .build())
+                                                            .tagSpecifications(
+                                                                LaunchTemplateTagSpecificationArgs
+                                                                    .builder()
+                                                                    .resourceType("instance")
+                                                                    .tags(Map.of("Name", "webapp"))
+                                                                    .build())
+                                                            .build());
 
-                                                                    // create a webapp instance
-                                                                    List<String> securityGroups = Collections.singletonList(id);
-                                                                    // create launch template used to create auto scaling groups.
-                                                                    var launchTemplate =
-                                                                            new LaunchTemplate(
-                                                                                    "webappLaunchTemplate",
-                                                                                    LaunchTemplateArgs.builder()
-                                                                                            .namePrefix("webapp")
-                                                                                            .imageId(amiId)
-                                                                                            .instanceType("t2.micro")
-                                                                                            .iamInstanceProfile(
-                                                                                                    LaunchTemplateIamInstanceProfileArgs.builder()
-                                                                                                            .arn(instanceProfile.arn())
-                                                                                                            .build())
-                                                                                            .networkInterfaces(LaunchTemplateNetworkInterfaceArgs.builder()
-                                                                                                    .associatePublicIpAddress(String.valueOf(true))
-                                                                                                    .securityGroups(appSecurityGroup.id().applyValue(List::of))
-                                                                                                    .subnetId(publicSubnets.get(0).id())
-                                                                                                    .subnetId(publicSubnets.get(1).id())
-                                                                                                    .build())
-                                                                                            .keyName("test")
-                                                                                            .userData(Base64.getEncoder().encodeToString(userData.getBytes()))
-                                                                                            .disableApiTermination(false)
-                                                                                            .instanceInitiatedShutdownBehavior("terminate")
-                                                                                            .blockDeviceMappings(
-                                                                                                    LaunchTemplateBlockDeviceMappingArgs.builder()
-                                                                                                            .deviceName("/dev/xvda")
-                                                                                                            .ebs(
-                                                                                                                    LaunchTemplateBlockDeviceMappingEbsArgs.builder()
-                                                                                                                            .volumeSize(25)
-                                                                                                                            .volumeType("gp2")
-                                                                                                                            .deleteOnTermination(String.valueOf(true))
-                                                                                                                            .build())
-                                                                                                            .build())
-                                                                                            .tagSpecifications(LaunchTemplateTagSpecificationArgs.builder()
-                                                                                                    .resourceType("instance")
-                                                                                                    .tags(Map.of("Name", "webapp"))
-                                                                                                    .build())
-                                                                                            .build());
+                                                // create auto scaling group
+                                                var appAutoScalingGroup =
+                                                    new Group(
+                                                        "csye6225_asg",
+                                                        GroupArgs.builder()
+                                                            //
+                                                            // .availabilityZones(zoneNames.get(0))
+                                                            .vpcZoneIdentifiers(
+                                                                publicSubnetIds.applyValue(
+                                                                    ids -> ids))
+                                                            .healthCheckGracePeriod(300)
+                                                            .desiredCapacity(1)
+                                                            .maxSize(3)
+                                                            .minSize(1)
+                                                            .launchTemplate(
+                                                                GroupLaunchTemplateArgs.builder()
+                                                                    .id(launchTemplate.id())
+                                                                    .version("$Latest")
+                                                                    .build())
+                                                            .tags(
+                                                                GroupTagArgs.builder()
+                                                                    .key("Name")
+                                                                    .value("csye6225_asg")
+                                                                    .propagateAtLaunch(true)
+                                                                    .build())
+                                                            .defaultCooldown(60)
+                                                            .build());
 
+                                                // create auto scaling policy,Scale up policy when
+                                                // average CPU usage is above 5%. Increment by 1
+                                                var scaleUpPolicy =
+                                                    new Policy(
+                                                        "scaleUpPolicy",
+                                                        PolicyArgs.builder()
+                                                            .name("scaleUpPolicy")
+                                                            .autoscalingGroupName(
+                                                                appAutoScalingGroup.name())
+                                                            .adjustmentType("ChangeInCapacity")
+                                                            .scalingAdjustment(1)
+                                                            .cooldown(60)
+                                                            .build());
 
-                                                                    // create auto scaling group
-                                                                    var appAutoScalingGroup = new Group("csye6225_asg", GroupArgs.builder()
-//                                    .availabilityZones(zoneNames.get(0))
-                                                                            .vpcZoneIdentifiers(publicSubnetIds.applyValue(ids -> ids))
-                                                                            .healthCheckGracePeriod(300)
-                                                                            .desiredCapacity(1)
-                                                                            .maxSize(3)
-                                                                            .minSize(1)
-                                                                            .launchTemplate(GroupLaunchTemplateArgs.builder()
-                                                                                    .id(launchTemplate.id())
-                                                                                    .version("$Latest")
-                                                                                    .build())
-                                                                            .tags(
-                                                                                    GroupTagArgs.builder()
-                                                                                            .key("Name")
-                                                                                            .value("csye6225_asg")
-                                                                                            .propagateAtLaunch(true)
-                                                                                            .build())
-                                                                            .defaultCooldown(60)
-                                                                            .build());
+                                                // create auto scaling policy,Scale down policy when
+                                                // average CPU usage is below 3%. Decrement by 1
+                                                var scaleDownPolicy =
+                                                    new Policy(
+                                                        "scaleDownPolicy",
+                                                        PolicyArgs.builder()
+                                                            .name("scaleDownPolicy")
+                                                            .autoscalingGroupName(
+                                                                appAutoScalingGroup.name())
+                                                            .adjustmentType("ChangeInCapacity")
+                                                            .scalingAdjustment(-1)
+                                                            .cooldown(60)
+                                                            .build());
 
-                                                                    // create auto scaling policy,Scale up policy when average CPU usage is above 5%. Increment by 1
-                                                                    var scaleUpPolicy = new Policy("scaleUpPolicy", PolicyArgs.builder()
-                                                                            .name("scaleUpPolicy")
-                                                                            .autoscalingGroupName(appAutoScalingGroup.name())
-                                                                            .adjustmentType("ChangeInCapacity")
-                                                                            .scalingAdjustment(1)
-                                                                            .cooldown(60)
-                                                                            .build());
+                                                appAutoScalingGroup
+                                                    .name()
+                                                    .apply(
+                                                        name -> {
+                                                          // create a cloudwatch alarm, Scale up
+                                                          // policy when average CPU usage is above
+                                                          // 5%. Increment by 1
+                                                          var scaleUpAlarm =
+                                                              new MetricAlarm(
+                                                                  "scaleUpAlarm",
+                                                                  MetricAlarmArgs.builder()
+                                                                      .name("scaleUpAlarm")
+                                                                      .metricName("CPUUtilization")
+                                                                      .alarmDescription(
+                                                                          "Scale up policy when average CPU usage is above 5%. Increment by 1")
+                                                                      .comparisonOperator(
+                                                                          "GreaterThanOrEqualToThreshold")
+                                                                      .insufficientDataActions()
+                                                                      .evaluationPeriods(1)
+                                                                      .metricName("CPUUtilization")
+                                                                      .namespace("AWS/EC2")
+                                                                      .period(60)
+                                                                      .statistic("Average")
+                                                                      .threshold(5.0)
+                                                                      .alarmActions(
+                                                                          scaleUpPolicy
+                                                                              .arn()
+                                                                              .applyValue(List::of))
+                                                                      .dimensions(
+                                                                          Map.of(
+                                                                              "AutoScalingGroupName",
+                                                                              name))
+                                                                      .build());
 
-                                                                    // create auto scaling policy,Scale down policy when average CPU usage is below 3%. Decrement by 1
-                                                                    var scaleDownPolicy = new Policy("scaleDownPolicy", PolicyArgs.builder()
-                                                                            .name("scaleDownPolicy")
-                                                                            .autoscalingGroupName(appAutoScalingGroup.name())
-                                                                            .adjustmentType("ChangeInCapacity")
-                                                                            .scalingAdjustment(-1)
-                                                                            .cooldown(60)
-                                                                            .build());
+                                                          // create auto scaling policy,Scale down
+                                                          // policy when average CPU usage is below
+                                                          // 3%. Decrement by 1
+                                                          var scaleDownAlarm =
+                                                              new MetricAlarm(
+                                                                  "scaleDownAlarm",
+                                                                  MetricAlarmArgs.builder()
+                                                                      .name("scaleDownAlarm")
+                                                                      .metricName("CPUUtilization")
+                                                                      .alarmDescription(
+                                                                          "Scale down policy when average CPU usage is below 5%. Decrement by 1")
+                                                                      .comparisonOperator(
+                                                                          "LessThanOrEqualToThreshold")
+                                                                      .insufficientDataActions()
+                                                                      .evaluationPeriods(1)
+                                                                      .metricName("CPUUtilization")
+                                                                      .namespace("AWS/EC2")
+                                                                      .period(60)
+                                                                      .statistic("Average")
+                                                                      .threshold(3.0)
+                                                                      .alarmActions(
+                                                                          scaleDownPolicy
+                                                                              .arn()
+                                                                              .applyValue(List::of))
+                                                                      .dimensions(
+                                                                          Map.of(
+                                                                              "AutoScalingGroupName",
+                                                                              name))
+                                                                      .build());
 
+                                                          // create a app load balancer
+                                                          var loadBalancer =
+                                                              new LoadBalancer(
+                                                                  "appLoadBalancer",
+                                                                  LoadBalancerArgs.builder()
+                                                                      .internal(false)
+                                                                      .loadBalancerType(
+                                                                          "application")
+                                                                      .securityGroups(
+                                                                          loadBalancerSecurityGroup
+                                                                              .id()
+                                                                              .applyValue(List::of))
+                                                                      .subnets(
+                                                                          publicSubnetIds
+                                                                              .applyValue(
+                                                                                  ids -> ids))
+                                                                      .build());
 
-                                                                    appAutoScalingGroup.name().apply(name -> {
-                                                                        // create a cloudwatch alarm, Scale up policy when average CPU usage is above 5%. Increment by 1
-                                                                        var scaleUpAlarm = new MetricAlarm("scaleUpAlarm", MetricAlarmArgs.builder()
-                                                                                .name("scaleUpAlarm")
-                                                                                .metricName("CPUUtilization")
-                                                                                .alarmDescription("Scale up policy when average CPU usage is above 5%. Increment by 1")
-                                                                                .comparisonOperator("GreaterThanOrEqualToThreshold")
-                                                                                .insufficientDataActions()
-                                                                                .evaluationPeriods(1)
-                                                                                .metricName("CPUUtilization")
-                                                                                .namespace("AWS/EC2")
-                                                                                .period(60)
-                                                                                .statistic("Average")
-                                                                                .threshold(5.0)
-                                                                                .alarmActions(scaleUpPolicy.arn().applyValue(List::of))
-                                                                                .dimensions(Map.of("AutoScalingGroupName", name))
-                                                                                .build());
+                                                          // create a target group
+                                                          var targetGroup =
+                                                              new TargetGroup(
+                                                                  "appTargetGroup",
+                                                                  TargetGroupArgs.builder()
+                                                                      .port(8080)
+                                                                      .protocol("HTTP")
+                                                                      .targetType("instance")
+                                                                      .vpcId(main.id())
+                                                                      .healthCheck(
+                                                                          TargetGroupHealthCheckArgs
+                                                                              .builder()
+                                                                              .path("/healthz")
+                                                                              .port("8080")
+                                                                              .protocol("HTTP")
+                                                                              .build())
+                                                                      .build());
+                                                          // create a listener
+                                                          var listener =
+                                                              new Listener(
+                                                                  "appListener",
+                                                                  ListenerArgs.builder()
+                                                                      .loadBalancerArn(
+                                                                          loadBalancer.arn())
+                                                                      .port(443)
+                                                                      .protocol("HTTPS")
+                                                                      .sslPolicy("ELBSecurityPolicy-2016-08")
+                                                                      .certificateArn("arn:aws:acm:us-west-2:446423905010:certificate/79368590-1c40-4706-a01e-a911e4d60a21")
+                                                                      .defaultActions(
+                                                                          ListenerDefaultActionArgs
+                                                                              .builder()
+                                                                              .type("forward")
+                                                                              .targetGroupArn(
+                                                                                  targetGroup.arn())
+                                                                              .build())
+                                                                      .build());
 
-                                                                        // create auto scaling policy,Scale down policy when average CPU usage is below 3%. Decrement by 1
-                                                                        var scaleDownAlarm = new MetricAlarm("scaleDownAlarm", MetricAlarmArgs.builder()
-                                                                                .name("scaleDownAlarm")
-                                                                                .metricName("CPUUtilization")
-                                                                                .alarmDescription("Scale down policy when average CPU usage is below 5%. Decrement by 1")
-                                                                                .comparisonOperator("LessThanOrEqualToThreshold")
-                                                                                .insufficientDataActions()
-                                                                                .evaluationPeriods(1)
-                                                                                .metricName("CPUUtilization")
-                                                                                .namespace("AWS/EC2")
-                                                                                .period(60)
-                                                                                .statistic("Average")
-                                                                                .threshold(3.0)
-                                                                                .alarmActions(scaleDownPolicy.arn().applyValue(List::of))
-                                                                                .dimensions(Map.of("AutoScalingGroupName", name))
-                                                                                .build());
+                                                          // Attach the load balancer to the Auto
+                                                          // Scaling group
+                                                          var attachment =
+                                                              new Attachment(
+                                                                  "asgAttachment",
+                                                                  AttachmentArgs.builder()
+                                                                      .lbTargetGroupArn(
+                                                                          targetGroup.arn())
+                                                                      .autoscalingGroupName(
+                                                                          appAutoScalingGroup
+                                                                              .name())
+                                                                      .build());
 
-                                                                        // create a app load balancer
-                                                                        var loadBalancer = new LoadBalancer("appLoadBalancer", LoadBalancerArgs.builder()
-                                                                                .internal(false)
-                                                                                .loadBalancerType("application")
-                                                                                .securityGroups(loadBalancerSecurityGroup.id().applyValue(List::of))
-                                                                                .subnets(publicSubnetIds.applyValue(ids -> ids))
-                                                                                .build());
+                                                          // create a route53 record
+                                                          Optional<String> hostedZoneId =
+                                                              config.get("zoneId");
+                                                          Optional<String> domainName =
+                                                              config.get("domainName");
+                                                          // check config
+                                                          if (hostedZoneId.isEmpty()
+                                                              || domainName.isEmpty()) {
+                                                            throw new RuntimeException(
+                                                                "zoneId and domainName must be configured");
+                                                          }
+                                                          // get config value to string
+                                                          String zoneId = hostedZoneId.get();
+                                                          String domainNameString =
+                                                              domainName.get();
+                                                          // create a route53 record
+                                                          var record =
+                                                              new Record(
+                                                                  "webapp",
+                                                                  RecordArgs.builder()
+                                                                      .zoneId(zoneId)
+                                                                      .name(domainNameString)
+                                                                      .type("A")
+                                                                      .aliases(
+                                                                          RecordAliasArgs.builder()
+                                                                              .name(
+                                                                                  loadBalancer
+                                                                                      .dnsName())
+                                                                              .zoneId(
+                                                                                  loadBalancer
+                                                                                      .zoneId())
+                                                                              .evaluateTargetHealth(
+                                                                                  true)
+                                                                              .build())
+                                                                      .build());
 
-                                                                        // create a target group
-                                                                        var targetGroup = new TargetGroup("appTargetGroup", TargetGroupArgs.builder()
-                                                                                .port(8080)
-                                                                                .protocol("HTTP")
-                                                                                .targetType("instance")
-                                                                                .vpcId(main.id())
-                                                                                .healthCheck(TargetGroupHealthCheckArgs.builder()
-                                                                                        .path("/healthz")
-                                                                                        .port("8080")
-                                                                                        .protocol("HTTP")
-                                                                                        .build())
-                                                                                .build());
-                                                                        // create a listener
-                                                                        var listener = new Listener("appListener", ListenerArgs.builder()
-                                                                                .loadBalancerArn(loadBalancer.arn())
-                                                                                .port(80)
-                                                                                .protocol("HTTP")
-                                                                                .defaultActions(ListenerDefaultActionArgs.builder()
-                                                                                        .type("forward")
-                                                                                        .targetGroupArn(targetGroup.arn())
-                                                                                        .build())
-                                                                                .build());
+                                                          // create s3 bucket
+                                                          var s3Bucket = new Bucket("myBucket");
 
-                                                                        // Attach the load balancer to the Auto Scaling group
-                                                                        var attachment = new Attachment("asgAttachment", AttachmentArgs.builder()
-                                                                                .lbTargetGroupArn(targetGroup.arn())
-                                                                                .autoscalingGroupName(appAutoScalingGroup.name())
-                                                                                .build());
+                                                          // upload file to s3 bucket
+                                                          var s3BucketObject =
+                                                              new BucketObject(
+                                                                  "myJar",
+                                                                  BucketObjectArgs.builder()
+                                                                      .bucket(s3Bucket.id())
+                                                                      .source(
+                                                                          new FileAsset(
+                                                                              "../aws/src/main/resources/lambda_function-1.0-SNAPSHOT.jar"))
+                                                                      .build());
 
-                                                                        // create a route53 record
-                                                                        Optional<String> hostedZoneId = config.get("zoneId");
-                                                                        Optional<String> domainName = config.get("domainName");
-                                                                        // check config
-                                                                        if (hostedZoneId.isEmpty() || domainName.isEmpty()) {
-                                                                            throw new RuntimeException("zoneId and domainName must be configured");
-                                                                        }
-                                                                        // get config value to string
-                                                                        String zoneId = hostedZoneId.get();
-                                                                        String domainNameString = domainName.get();
-                                                                        // create a route53 record
-                                                                        var record =
-                                                                                new Record(
-                                                                                        "webapp",
-                                                                                        RecordArgs.builder()
-                                                                                                .zoneId(zoneId)
-                                                                                                .name(domainNameString)
-                                                                                                .type("A")
-                                                                                                .aliases(RecordAliasArgs.builder()
-                                                                                                        .name(loadBalancer.dnsName())
-                                                                                                        .zoneId(loadBalancer.zoneId())
-                                                                                                        .evaluateTargetHealth(true)
-                                                                                                        .build())
-                                                                                                .build());
+                                                          // create a s3 key
+                                                          var s3Key = s3BucketObject.key();
 
-                                                                    // create s3 bucket
-                                                                    var s3Bucket = new Bucket("myBucket");
+                                                          // Create Lambda function to download file
+                                                          var lambdaFunction =
+                                                              new Function(
+                                                                  "myLambdaFunction",
+                                                                  FunctionArgs.builder()
+                                                                      .runtime("java17")
+                                                                      .role(logRole.arn())
+                                                                      .timeout(300)
+                                                                      .handler(
+                                                                          "northeastern.xiaosongzhai.SnsEventHandler::handleRequest")
+                                                                      .s3Bucket(s3Bucket.id())
+                                                                      .s3Key(s3Key)
+                                                                      .environment(
+                                                                          FunctionEnvironmentArgs
+                                                                              .builder()
+                                                                              .variables(
+                                                                                  Map.of(
+                                                                                      "gcpCredentialsSecret",
+                                                                                      secret,
+                                                                                      "apiKay",
+                                                                                      "md-I0Fu5zDQVE7oIfOH9gxaPg"))
+                                                                              .build())
+                                                                      .build());
 
-                                                                    // upload file to s3 bucket
-                                                                    var s3BucketObject = new BucketObject("myJar", BucketObjectArgs.builder()
-                                                                            .bucket(s3Bucket.id())
-                                                                            .source(new FileAsset("../aws/src/main/resources/lambda_function-1.0-SNAPSHOT.jar"))
-                                                                            .build());
+                                                          // Create sns subscription
+                                                          var subscription =
+                                                              new TopicSubscription(
+                                                                  "subscription",
+                                                                  TopicSubscriptionArgs.builder()
+                                                                      .protocol("lambda")
+                                                                      .endpoint(
+                                                                          lambdaFunction.arn())
+                                                                      .topic(topic.arn())
+                                                                      .build());
 
-                                                                    // create a s3 key
-                                                                    var s3Key = s3BucketObject.key();
+                                                          // sns trigger lambda function
+                                                          var permission =
+                                                              new Permission(
+                                                                  "triggerLambda",
+                                                                  PermissionArgs.builder()
+                                                                      .action(
+                                                                          "lambda:InvokeFunction")
+                                                                      .function(
+                                                                          lambdaFunction.arn())
+                                                                      .principal(
+                                                                          "sns.amazonaws.com")
+                                                                      .sourceArn(topic.arn())
+                                                                      .build());
 
-                                                                    // Create Lambda function to download file
-                                                                    var lambdaFunction = new Function("myLambdaFunction", FunctionArgs.builder()
-                                                                            .runtime("java17")
-                                                                            .role(logRole.arn())
-                                                                            .timeout(300)
-                                                                            .handler("northeastern.xiaosongzhai.SnsEventHandler::handleRequest")
-                                                                            .s3Bucket(s3Bucket.id())
-                                                                            .s3Key(s3Key)
-                                                                            .environment(FunctionEnvironmentArgs.builder()
-                                                                                    .variables(Map.of("gcpCredentialsSecret", secret, "apiKay", "md-I0Fu5zDQVE7oIfOH9gxaPg"))
-                                                                                    .build())
-                                                                            .build());
-
-                                                                    // Create sns subscription
-                                                                    var subscription = new TopicSubscription("subscription", TopicSubscriptionArgs.builder()
-                                                                            .protocol("lambda")
-                                                                            .endpoint(lambdaFunction.arn())
-                                                                            .topic(topic.arn())
-                                                                            .build());
-
-                                                                    // sns trigger lambda function
-                                                                    var permission = new Permission("triggerLambda", PermissionArgs.builder()
-                                                                            .action("lambda:InvokeFunction")
-                                                                            .function(lambdaFunction.arn())
-                                                                            .principal("sns.amazonaws.com")
-                                                                            .sourceArn(topic.arn())
-                                                                            .build());
-
-                                                                    return Output.ofNullable(null);
-                                                                });
-                                                        return Output.ofNullable(null);
-                                                    });
-                                            return Output.ofNullable(null);
-                                        });
+                                                          return Output.ofNullable(null);
+                                                        });
+                                                return Output.ofNullable(null);
+                                              });
+                                      return Output.ofNullable(null);
+                                    });
                                 return Output.ofNullable(null);
-                            });
+                              });
                           return Output.ofNullable(null);
                         });
                 return Output.ofNullable(null);
